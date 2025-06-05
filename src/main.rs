@@ -1,4 +1,5 @@
 use std::{
+    fs,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
 };
@@ -24,11 +25,32 @@ fn main() {
 fn handle_connection(stream: &mut TcpStream) {
     let mut buffer = [0; 1024];
 
-    let bytes_read = stream.read(&mut buffer).unwrap_or(0);
+    let _ = match stream.read(&mut buffer) {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("Error reading from client: {}", e);
+            0
+        }
+    };
 
-    let response = "HTTP/1.1 200 OK\r\n\r\nHello, world!";
+    let get_root = b"GET / HTTP/1.1\r\n";
+
+    let (status_line, filename) = if buffer.starts_with(get_root) {
+        ("HTTP/1.1 200 OK", "index.html")
+    } else {
+        ("HTTP/1.1 404 NOT FOUND", "404.html")
+    };
+
+    let contents = fs::read_to_string(filename).unwrap_or_else(|_| String::from("File not found"));
+
+    let response = format!(
+        "{}\r\nContent-Length: {}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{}",
+        status_line,
+        contents.len(),
+        contents
+    );
 
     stream
-        .write(response.as_bytes())
+        .write_all(response.as_bytes())
         .expect("Failed to write response to client");
 }
