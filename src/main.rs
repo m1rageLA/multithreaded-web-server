@@ -1,4 +1,7 @@
-use std::{io::Read, net::{TcpListener, TcpStream}};
+use std::{
+    io::{Read, Write},
+    net::{TcpListener, TcpStream},
+};
 fn main() {
     let listener =
         TcpListener::bind("127.0.0.1:7878").expect("Failed to start TCP listener on port 7878");
@@ -21,16 +24,11 @@ fn main() {
 fn handle_connection(stream: &mut TcpStream) {
     let mut buffer = [0; 1024];
 
-    match stream.read(&mut buffer) {
-        Ok(bytes_read) => {
-            println!(
-                "Received {} bytes: {}",
-                bytes_read,
-                String::from_utf8_lossy(&buffer[..bytes_read])
-            );
-        }
-        Err(e) => {
-            eprintln!("Error reading from client: {}", e);
-        }
-    }
+    let bytes_read = stream.read(&mut buffer).unwrap_or(0);
+
+    let response = "HTTP/1.1 200 OK\r\n\r\nHello, world!";
+
+    stream
+        .write(response.as_bytes())
+        .expect("Failed to write response to client");
 }
