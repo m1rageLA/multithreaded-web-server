@@ -1,20 +1,38 @@
+pub mod handler;
+
+use crate::server::handler::handle_connection;
+use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
 
-mod handler;
-pub fn run_server(address: &str) {
-    let listener = TcpListener::bind(address).expect("Failed to start TCP listener on port 7878");
+pub struct Server {
+    address: String,
+}
 
-    println!("Server running on {}", address);
+impl Server {
+    // контруктор
+    pub fn new(adress: String) -> Self {
+        Self {
+            address: adress.to_string(),
+        }
+    }
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(mut stream) => {
-                println!("Client connected");
-                thread::spawn(move || handler::handle_connection(&mut stream));
-            }
-            Err(e) => {
-                println!("Error connecting to client: {}", e);
+    pub fn run(&self) {
+        let listener = TcpListener::bind(&self.address).expect("Failed to bind address");
+
+        println!("Server is running on {}", self.address);
+
+        for stream in listener.incoming() {
+            match stream {
+                Ok(mut stream) => {
+                    println!("New connection: {}", stream.peer_addr().unwrap());
+                    thread::spawn(move || {
+                        handle_connection(&mut stream);
+                    });
+                }
+                Err(e) => {
+                    println!("Error: {}", e);
+                }
             }
         }
     }

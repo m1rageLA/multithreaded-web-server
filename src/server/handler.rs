@@ -1,9 +1,12 @@
-use std::{fs, io::Read, net::TcpStream, os::macos::raw::stat};
+use std::{
+    fs,
+    io::{Read, Write},
+    net::TcpStream,
+};
 
-use std::io::Write;
+/// Вынесена логика разбора запроса + ответа
 pub fn handle_connection(stream: &mut TcpStream) {
     let mut buffer = [0; 1024];
-
     let bytes_read = match stream.read(&mut buffer) {
         Ok(n) => n,
         Err(e) => {
@@ -12,64 +15,45 @@ pub fn handle_connection(stream: &mut TcpStream) {
         }
     };
 
-    let request_text = match std::str::from_utf8(&buffer[..bytes_read]) {
-        Ok(s) => {
-            println!("{}", s);
-            s
-        }
+    let request = match std::str::from_utf8(&buffer[..bytes_read]) {
+        Ok(s) => s,
         Err(_) => {
             eprintln!("Request is not valid UTF-8");
             return;
         }
     };
+    println!("Request:\n{}", request);
 
-    let request_line = match request_text.lines().next() {
-        Some(line) => line,
-        None => {
-            eprintln!("Request is empty");
-            return;
-        }
-    };
-
+    // простейшая HTTP-логика: только GET + файлы
+    let mut lines = request.lines();
+    let request_line = lines.next().unwrap_or("");
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or("");
-    let path = parts.next().unwrap_or("/");
+    let path = parts.next().unwrap_or("/").trim_start_matches('/');
 
-    let path = path[1..].to_string();
-
-    let (status_line, contents) = if method == "GET" {
-        let filename: String = if path == "/" {
-            "index.html".to_string()
-        } else {
-            path.clone()
+    if method == "GET" {
+        // файл по пути или 404.html
+        let filename = if path.is_empty() { "index.html" } else { path };
+        let (status, content) = match fs::read_to_string(filename) {
+            Ok(body) => ("HTTP/1.1 200 OK", body),
+            Err(_) => (
+                "HTTP/1.1 404 Not Found",
+                fs::read_to_string("404.html").unwrap_or_default(),
+            ),
         };
-
-        let (status_line, filename) = if fs::metadata(&filename).is_ok() {
-            ("HTTP/1.1 200 OK", filename)
-        } else {
-            ("HTTP/1.1 404 NOT FOUND", "404.html".to_string())
-        };
-
-        let contents = fs::read_to_string(&filename).unwrap_or_else(|_| {
-            eprintln!("Failed to read file: {}", filename);
-            String::from("File not found")
-        });
 
         let response = format!(
-            "{}Content-Lenght: {}\r\n\r\n{}",
-            status_line,
-            contents.len(),
-            contents
+            "{}\r\nContent-Length: {}\r\n\r\n{}",
+            status,
+            content.len(),
+            content
         );
-
         if let Err(e) = stream.write_all(response.as_bytes()) {
             eprintln!("Failed to send response: {}", e);
         }
-        (status_line, contents) // ⬅️ верни кортеж
     } else {
-        (
-            "HTTP/1.1 405 Method Not Allowed",
-            String::from("Method Not Allowed"),
-        )
-    };
+        // Method not allowed
+        let resp = "HTTP/1.1 405 Method Not Allowed\r\n\r\n";
+        let _ = stream.write_all(resp.as_bytes());
+    }
 }
