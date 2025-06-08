@@ -1,10 +1,6 @@
-use std::{
-    fs,
-    io::{Read, Write},
-    net::TcpStream,
-};
+use std::{fs, io::Read, net::TcpStream, os::macos::raw::stat};
 
-
+use std::io::Write;
 pub fn handle_connection(stream: &mut TcpStream) {
     let mut buffer = [0; 1024];
 
@@ -39,31 +35,41 @@ pub fn handle_connection(stream: &mut TcpStream) {
     let method = parts.next().unwrap_or("");
     let path = parts.next().unwrap_or("/");
 
-    let path = if path == "/" {
-        "index.html".to_string()
+    let path = path[1..].to_string();
+
+    let (status_line, contents) = if method == "GET" {
+        let filename: String = if path == "/" {
+            "index.html".to_string()
+        } else {
+            path.clone()
+        };
+
+        let (status_line, filename) = if fs::metadata(&filename).is_ok() {
+            ("HTTP/1.1 200 OK", filename)
+        } else {
+            ("HTTP/1.1 404 NOT FOUND", "404.html".to_string())
+        };
+
+        let contents = fs::read_to_string(&filename).unwrap_or_else(|_| {
+            eprintln!("Failed to read file: {}", filename);
+            String::from("File not found")
+        });
+
+        let response = format!(
+            "{}Content-Lenght: {}\r\n\r\n{}",
+            status_line,
+            contents.len(),
+            contents
+        );
+
+        if let Err(e) = stream.write_all(response.as_bytes()) {
+            eprintln!("Failed to send response: {}", e);
+        }
+        (status_line, contents) // ⬅️ верни кортеж
     } else {
-        path[1..].to_string()
-    };
-
-    let (status_line, filename) = if method == "GET" {
-        ("HTTP/1.1 200 OK", path)
-    } else {
-        ("HTTP/1.1 404 Not Found", "/404.html".to_string())
-    };
-
-    let contents = fs::read_to_string(&filename).unwrap_or_else(|_| {
-        eprintln!("Failed to read file: {}", filename);
-        String::from("File not found")
-    });
-
-    let response = format!(
-        "{}\r\nContent-Length: {}\r\n\r\n{}",
-        status_line,
-        contents.len(),
-        contents
-    );
-
-    if let Err(e) = stream.write_all(response.as_bytes()) {
-        eprintln!("Failed to write response: {}", e);
+        (
+            "HTTP/1.1 405 Method Not Allowed",
+            String::from("Method Not Allowed"),
+        )
     };
 }
