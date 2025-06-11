@@ -25,6 +25,7 @@ impl App {
                 Ok(mut stream) => {
                     println!("New connection: {}", stream.peer_addr().unwrap());
                     thread::spawn(move || {
+
                         let mut buffer = [0; 1024];
                         let n = stream.read(&mut buffer).unwrap_or(0);
                         let req_str = String::from_utf8_lossy(&buffer[..n]);
@@ -44,14 +45,8 @@ impl App {
                                 method: first.split_whitespace().next().unwrap_or("").to_string(),
                             };
 
-                            let res = Response {
-                                stream: &mut response_stream,
-                                status: 200,
-                                headers: vec![],
-                                body: vec![],
-                            };
-
-                            (route.handler)(req, res);
+                            let mut res = Response::new(&mut stream);
+                            (route.handler)(req, &mut res);
                         } else {
                             eprintln!("404 Not Found: {}", path);
                         }

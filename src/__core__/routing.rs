@@ -7,7 +7,7 @@ use crate::__core__::types::{Request, Response};
 impl App {
     pub fn get<F>(&mut self, path: &str, handler: F)
     where
-        F: Fn(Request, Response) -> Result<(), Box<dyn std::error::Error + Send + Sync>> + Send + Sync + 'static,
+        F: Fn(Request, &mut Response) -> Result<(), Box<dyn std::error::Error + Send + Sync>> + Send + Sync + 'static,
     {
         self.routes.push(Route {
             path: path.to_string(),
