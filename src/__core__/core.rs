@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::thread;
 
 impl App {
-    pub fn new(address: String) -> Self {
+    pub fn new(address: &str) -> Self {
         Self {
             address: address.to_string(),
             routes: Vec::new(),
